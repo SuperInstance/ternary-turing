@@ -1,0 +1,7 @@
+[package]
+name = "ternary-turing"
+version = "0.1.0"
+edition = "2021"
+description = "Turing machines with ternary tape — computation, halting, and busy beaver"
+license = "MIT"
+[dependencies]
