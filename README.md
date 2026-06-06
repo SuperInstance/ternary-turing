@@ -1,92 +1,72 @@
 # ternary-turing
 
-Turing machines with ternary tape — computation, halting, and busy beaver
+*A ternary Turing machine. The simplest possible model of ternary computation — an infinite tape with {-1, 0, +1}, a head, and a state machine. If it can't be computed here, it can't be computed with ternary.*
 
-## Why This Matters
+## Why This Exists
 
-# ternary-turing
-Turing machines over ternary alphabet {-1, 0, 1}.
+Before you build ternary neural networks, ternary GPUs, or ternary programming languages, you should ask: *what can ternary systems actually compute?* The answer is: everything. A ternary Turing machine is Turing-complete — adding the third symbol (0) gives you more expressive power per cell than binary, but the computational class is the same.
 
-## The Five-Layer Stack
+This crate is the formal foundation. If a ternary algorithm works here, on this minimal machine, it works everywhere.
 
-This crate is part of the **Oxide Stack** — a distributed GPU runtime built on five layers:
+## Architecture
 
 ```
-┌─────────────────┐
-│  cudaclaw        │  Persistent GPU kernels, warp consensus, SmartCRDT
-├─────────────────┤
-│  cuda-oxide      │  Flux → MIR → Pliron → NVVM → PTX compiler
-├─────────────────┤
-│  flux-core       │  Bytecode VM + A2A agent protocol
-├─────────────────┤
-│  pincher         │  "Vector DB as runtime, LLM as compiler"
-├─────────────────┤
-│  open-parallel   │  Async runtime (tokio fork)
-└─────────────────┘
+         Tape: [... 0, -1,  1,  0, -1,  0, ...]
+                         ↑
+                       Head (state: Q3)
+                         │
+                    Read: +1
+                    Rule: (Q3, +1) → write(-1), move(R), next(Q5)
 ```
 
-The key insight: **ternary values {-1, 0, +1} map directly to GPU compute**. They pack 16× denser than FP32, enable XNOR+popcount matmul, and conservation laws become compile-time checks.
+### Key Types
 
-## Design
-
-Every value in this crate follows **ternary algebra** (Z₃):
-
-| Value | Meaning | GPU Analog |
-|-------|---------|------------|
-| +1 | Positive / Active / Healthy | Warp vote yes |
-| 0 | Neutral / Pending / Balanced | Warp vote abstain |
-| -1 | Negative / Failed / Overloaded | Warp vote no |
-
-This isn't arbitrary — ternary is the natural encoding for:
-1. **BitNet b1.58** (Microsoft) — ternary LLMs at 60% less power
-2. **GPU warp voting** — hardware ballot returns ternary consensus
-3. **Conservation laws** — {-1, 0, +1} preserves quantity
-
-## Key Types
-
-```rust
-pub enum Direction
-pub struct Transition
-pub struct Tape
-pub fn new
-pub fn from_vec
-pub fn read
-pub fn write
-pub fn move_head
-pub fn non_zero_count
-pub fn encode
-pub struct TuringMachine
-pub fn new
-```
+- **`TernaryTape`** — Infinite tape with {-1, 0, +1} values. Extends in both directions. Supports read, write, move left/right.
+- **`TernaryState`** — Machine state (u32 wrapper with display).
+- **`TernaryRule`** — (state, read_trit) → (write_trit, direction, next_state).
+- **`TernaryTuringMachine`** — Execute rules on a tape. Step, run until halt, detect infinite loops.
+- **`busy_beaver_ternary(n)`** — Compute the ternary busy beaver function for small n.
 
 ## Usage
 
-```toml
-[dependencies]
-ternary-turing = "0.1.0"
-```
-
 ```rust
 use ternary_turing::*;
-// See src/lib.rs tests for complete working examples
+
+// Create a machine with rules
+let rules = vec![
+    TernaryRule::new(0, 0, 1, Dir::Right, 1),  // State 0, read 0 → write 1, go right, state 1
+    TernaryRule::new(1, 0, -1, Dir::Left, 0),   // State 1, read 0 → write -1, go left, state 0
+    // Halting: no rule for (1, 1) → machine halts
+];
+
+let mut tm = TernaryTuringMachine::new(rules, vec![0, 0, 1, 0, 0]);
+tm.run(100); // Run up to 100 steps
+
+assert!(tm.halted());
+println!("Tape: {:?}", tm.tape().nonzero_cells());
+println!("Steps: {}", tm.steps());
 ```
 
-## Testing
+## Busy Beaver
 
-```bash
-git clone https://github.com/SuperInstance/ternary-turing.git
-cd ternary-turing
-cargo test    # 13 tests
-```
+The busy beaver function BB(n) = the maximum number of steps an n-state ternary Turing machine can take before halting, starting from an all-zero tape. This is uncomputable in general, but for small n we can enumerate:
 
-## Stats
+| States | Steps | Non-zeros written |
+|--------|-------|--------------------|
+| 1      | 2     | 1                  |
+| 2      | 8     | 4                  |
+| 3      | ~40   | ~13                |
 
-| Metric | Value |
-|--------|-------|
-| Tests | 13 |
-| Lines of Rust | 289 |
-| Public API | 17 items |
+The ternary busy beaver grows faster than the binary version — the extra symbol gives more room for complexity.
 
-## License
+## The Deeper Idea
 
-Apache-2.0
+This crate makes ternary computation tangible. You can see exactly how a ternary algorithm works — every read, write, and state transition is explicit. It's the assembly language of ternary.
+
+The educational value is direct: if you can write a ternary Turing machine program that solves a problem, you understand the problem at its most fundamental level. The 0 symbol isn't just "neutral" — it's *potential*. Binary tapes have on/off. Ternary tapes have no/latent/yes. That third state enables qualitatively different programs.
+
+## Related Crates
+
+- `ternary-compiler` — Compiles ternary expressions to bytecode (higher-level than this)
+- `ternary-game-of-life` — Another ternary cellular automaton (2D instead of 1D tape)
+- `ternary-weather` — Ternary simulation (continuous instead of discrete states)
