@@ -1,72 +1,102 @@
-# ternary-turing
+# Ternary Turing — Turing Machines over Balanced-Ternary Alphabet
 
-*A ternary Turing machine. The simplest possible model of ternary computation — an infinite tape with {-1, 0, +1}, a head, and a state machine. If it can't be computed here, it can't be computed with ternary.*
+**Ternary Turing** implements Turing machines over the alphabet {-1, 0, +1}. The machine reads ternary symbols from the tape, writes ternary symbols back, moves left/right/stays, and transitions between states. It provides tape encoding/decoding, non-zero counting, and supports the halting problem and busy beaver experiments in the ternary domain.
 
-## Why This Exists
+## Why It Matters
 
-Before you build ternary neural networks, ternary GPUs, or ternary programming languages, you should ask: *what can ternary systems actually compute?* The answer is: everything. A ternary Turing machine is Turing-complete — adding the third symbol (0) gives you more expressive power per cell than binary, but the computational class is the same.
+The Turing machine is the foundational model of computation. Studying it over a ternary alphabet reveals how computational power relates to the alphabet size. While binary Turing machines can compute exactly the same functions as ternary ones, the ternary version often uses fewer states and tape cells — balanced ternary is the most efficient radix for positional number systems. The busy beaver problem (finding the machine that writes the most non-zero symbols before halting) has different answers in ternary: ternary busy beaver values grow faster than binary ones, making the ternary version both more interesting and harder to analyze.
 
-This crate is the formal foundation. If a ternary algorithm works here, on this minimal machine, it works everywhere.
+## How It Works
 
-## Architecture
+### Tape
+
+The `Tape` is a vector of ternary values {-1, 0, +1} with a head position. Operations:
+- `read()`: Return the trit at head position. O(1).
+- `write(v)`: Write trit v at head. O(1).
+- `move_head(dir)`: Move left (decrement), right (increment, extend if needed), or stay. O(1) amortized.
+
+### Transitions
+
+Each `Transition` specifies:
+- Current state and read symbol
+- Write symbol
+- Direction (L, R, S)
+- Next state
+
+The machine stores transitions in a lookup table. Each step is O(1) table lookup.
+
+### Machine Execution
 
 ```
-         Tape: [... 0, -1,  1,  0, -1,  0, ...]
-                         ↑
-                       Head (state: Q3)
-                         │
-                    Read: +1
-                    Rule: (Q3, +1) → write(-1), move(R), next(Q5)
+TuringMachine::run():
+  while current_state ≠ HALT:
+    symbol = tape.read()
+    transition = lookup(current_state, symbol)
+    tape.write(transition.write)
+    tape.move_head(transition.dir)
+    current_state = transition.next
 ```
 
-### Key Types
+Each step is O(1). Total steps depend on the machine — may not halt.
 
-- **`TernaryTape`** — Infinite tape with {-1, 0, +1} values. Extends in both directions. Supports read, write, move left/right.
-- **`TernaryState`** — Machine state (u32 wrapper with display).
-- **`TernaryRule`** — (state, read_trit) → (write_trit, direction, next_state).
-- **`TernaryTuringMachine`** — Execute rules on a tape. Step, run until halt, detect infinite loops.
-- **`busy_beaver_ternary(n)`** — Compute the ternary busy beaver function for small n.
+### Tape Encoding
 
-## Usage
+`encode()` converts the tape to a single number using balanced ternary positional notation:
+
+```
+n = Σ ((vᵢ + 1) mod 3) × 3ⁱ   for all tape cells
+```
+
+This provides a canonical fingerprint for tape configurations. O(cells).
+
+### Non-Zero Count
+
+Counts cells with non-zero values — the "score" for busy beaver problems. O(cells).
+
+## Quick Start
 
 ```rust
-use ternary_turing::*;
+use ternary_turing::{Tape, Transition, Direction};
 
-// Create a machine with rules
-let rules = vec![
-    TernaryRule::new(0, 0, 1, Dir::Right, 1),  // State 0, read 0 → write 1, go right, state 1
-    TernaryRule::new(1, 0, -1, Dir::Left, 0),   // State 1, read 0 → write -1, go left, state 0
-    // Halting: no rule for (1, 1) → machine halts
+let mut tape = Tape::new(10);
+tape.write(1);
+tape.move_head(Direction::R);
+tape.write(-1);
+
+// Build a simple machine that alternates +1 and -1
+let transitions = vec![
+    Transition { state: 0, read: 0, write: 1, dir: Direction::R, next: 1 },
+    Transition { state: 1, read: 0, write: -1, dir: Direction::R, next: 0 },
 ];
 
-let mut tm = TernaryTuringMachine::new(rules, vec![0, 0, 1, 0, 0]);
-tm.run(100); // Run up to 100 steps
-
-assert!(tm.halted());
-println!("Tape: {:?}", tm.tape().nonzero_cells());
-println!("Steps: {}", tm.steps());
+let non_zero = tape.non_zero_count();
+let encoded = tape.encode();
 ```
 
-## Busy Beaver
+```bash
+cargo add ternary-turing
+```
 
-The busy beaver function BB(n) = the maximum number of steps an n-state ternary Turing machine can take before halting, starting from an all-zero tape. This is uncomputable in general, but for small n we can enumerate:
+## API
 
-| States | Steps | Non-zeros written |
-|--------|-------|--------------------|
-| 1      | 2     | 1                  |
-| 2      | 8     | 4                  |
-| 3      | ~40   | ~13                |
+| Type / Function | Description |
+|---|---|
+| `Tape` | `{ cells: Vec<i8>, head: usize }` |
+| `Transition` | `{ state, read, write, dir, next }` |
+| `Direction` | `L`, `R`, `S` |
+| `Tape::encode()` | Balanced ternary → integer |
+| `Tape::non_zero_count()` | Count of ±1 cells |
 
-The ternary busy beaver grows faster than the binary version — the extra symbol gives more room for complexity.
+## Architecture Notes
 
-## The Deeper Idea
+The Turing machine is the theoretical foundation for ternary computation in **SuperInstance**. It proves that {-1, 0, +1} is computationally universal — any computable function can be expressed as a ternary Turing machine. The γ + η = C conservation manifests in the tape: non-zero cells contribute γ (information), zero cells contribute η (entropy/blank space), and their sum is the tape length. See [Architecture](https://github.com/SuperInstance/SuperInstance/blob/main/ARCHITECTURE.md).
 
-This crate makes ternary computation tangible. You can see exactly how a ternary algorithm works — every read, write, and state transition is explicit. It's the assembly language of ternary.
+## References:
 
-The educational value is direct: if you can write a ternary Turing machine program that solves a problem, you understand the problem at its most fundamental level. The 0 symbol isn't just "neutral" — it's *potential*. Binary tapes have on/off. Ternary tapes have no/latent/yes. That third state enables qualitatively different programs.
+- Turing, Alan. "On Computable Numbers," *Proc. London Math. Soc.*, 42, 1936 — original Turing machine.
+- Knuth, Donald. *The Art of Computer Programming, Vol. 2*, §4.1 — balanced ternary efficiency.
+| Rado, Tibor. "On Non-Computable Functions," *Bell System Tech. J.*, 41(3), 1962 — busy beaver problem.
 
-## Related Crates
+## License
 
-- `ternary-compiler` — Compiles ternary expressions to bytecode (higher-level than this)
-- `ternary-game-of-life` — Another ternary cellular automaton (2D instead of 1D tape)
-- `ternary-weather` — Ternary simulation (continuous instead of discrete states)
+MIT
