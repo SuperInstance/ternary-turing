@@ -97,6 +97,22 @@ The Turing machine is the theoretical foundation for ternary computation in **Su
 - Knuth, Donald. *The Art of Computer Programming, Vol. 2*, §4.1 — balanced ternary efficiency.
 | Rado, Tibor. "On Non-Computable Functions," *Bell System Tech. J.*, 41(3), 1962 — busy beaver problem.
 
+
+
+## Complexity Summary
+
+| Operation | Time | Notes |
+|---|---|---|
+| Tape read/write | O(1) | Direct index |
+| Tape move | O(1) amortized | Extend on right overflow |
+| Transition lookup | O(1) | State table |
+| encode() | O(cells) | Positional notation |
+| non_zero_count() | O(cells) | Single pass |
+| Machine step | O(1) | Lookup + write + move |
+| Machine run | Unbounded | Halting problem |
+
+The ternary alphabet gives 3^tape_length distinct tape configurations. For a 100-cell tape, this is ~5×10^47 states — vastly smaller than the infinite binary tape but computationally equivalent.
+
 ## License
 
 MIT
