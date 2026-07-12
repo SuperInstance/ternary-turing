@@ -1,7 +1,8 @@
-//! # ternary-turing
-//!
-//! Turing machines over ternary alphabet {-1, 0, 1}.
+//! Turing machines over ternary alphabet {-1, 0, 1}. See the README (included
+//! below as crate-level docs) for the full specification; its code blocks are
+//! compiled and run as doctests by `cargo test`.
 
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![no_std]
 

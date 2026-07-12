@@ -24,7 +24,7 @@ A Turing machine is a tuple **M = (Q, Σ, δ, q₀, q_halt)**:
 
 Each transition is:
 
-```
+```text
 δ(q, a) = (b, D, q')
 ```
 
@@ -36,7 +36,7 @@ If no transition matches `(state, read)`, the machine enters the halt state.
 
 The tape is encoded as a base-3 number using the mapping:
 
-```
+```text
 -1 → digit 0
  0 → digit 1
 +1 → digit 2
@@ -44,7 +44,7 @@ The tape is encoded as a base-3 number using the mapping:
 
 This is the **balanced ternary offset encoding**. For a tape of length *n*, the encoding is:
 
-```
+```text
 encode(tape) = Σᵢ digit(tape[i]) · 3^i
 ```
 
@@ -62,7 +62,7 @@ Each `step()` is **O(|δ|)** (linear scan of transition table). The `run(max_ste
 
 The busy beaver function **S(n)** asks: what is the maximum number of non-zero cells written by an *n*-state halting ternary Turing machine starting from the all-zero tape?
 
-```
+```text
 S(n) = max { non_zero_count(M) : M halts, |Q| = n }
 ```
 
@@ -74,7 +74,7 @@ For the ternary alphabet, the problem is related to the **generalized busy beave
 
 A pre-built machine that cycles the starting cell through the full ternary alphabet `0 → +1 → -1 → 0` and then halts. All transitions use `Direction::S` (stay) so the head re-reads the symbol it just wrote — moving away after each write would leave the written symbol on a fresh `0` cell and the cycle could never progress past the first step:
 
-```
+```text
 δ(0, 0)  → (1,  S, 0)    // 0 → +1, stay
 δ(0, 1)  → (-1, S, 0)    // +1 → -1, stay
 δ(0, -1) → (0,  S, 1)    // -1 → 0, halt
@@ -87,16 +87,22 @@ Starting from an all-zero tape, the machine halts in exactly 3 steps with the st
 ```rust
 use ternary_turing::*;
 
-// Build a simple machine: flip all zeros to ones, halt on non-zero
+// Write two +1s moving right, then halt. (For a halt to actually fire, the
+// head has to reach a cell whose read-symbol has a halting transition — so
+// we drive the state forward instead of relying on re-reading a written 1,
+// which a rightward-moving machine would leave behind on a fresh 0.)
 let transitions = vec![
-    Transition { state: 0, read: 0,  write: 1,  dir: Direction::R, next: 0 },
-    Transition { state: 0, read: 1,  write: 1,  dir: Direction::R, next: 1 },
+    Transition { state: 0, read: 0, write: 1, dir: Direction::R, next: 1 },
+    Transition { state: 1, read: 0, write: 1, dir: Direction::R, next: 2 },
 ];
 let tape = Tape::new(10);
-let mut tm = TuringMachine::new(tape, transitions, 1);
+let mut tm = TuringMachine::new(tape, transitions, 2);
 
 let steps = tm.run(1000);
-println!("Ran {} steps, {} non-zero cells", steps, tm.tape.non_zero_count());
+assert_eq!(steps, 2);
+assert!(tm.is_halted());
+println!("Ran {steps} steps, {} non-zero cells, halted = {}",
+         tm.tape.non_zero_count(), tm.is_halted());
 ```
 
 ## API
