@@ -101,7 +101,7 @@ println!("Ran {} steps, {} non-zero cells", steps, tm.tape.non_zero_count());
 
 | Type | Purpose |
 |---|---|
-| `Tape` | Infinite-extent tape (auto-extends rightward) |
+| `Tape` | Infinite-extent tape (auto-extends in both directions) |
 | `Transition` | Single δ entry: (state, read) → (write, dir, next) |
 | `TuringMachine` | State machine + tape + transition table |
 | `Direction` | L, R, or S (Stay) |

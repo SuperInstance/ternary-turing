@@ -62,10 +62,20 @@ impl Tape {
         }
     }
 
+    /// Move the head one cell in `dir`.
+    ///
+    /// The tape is infinite in *both* directions: moving right past the last
+    /// cell appends a fresh `0`, and moving left from cell 0 prepends a fresh
+    /// `0` (leaving `head` at 0, now pointing at the new cell). `S` leaves the
+    /// head in place. This never silently no-ops: a requested move always
+    /// actually moves the head to a distinct cell.
     pub fn move_head(&mut self, dir: Direction) {
         match dir {
             Direction::L => {
-                if self.head > 0 {
+                if self.head == 0 {
+                    self.cells.insert(0, 0);
+                    // head stays 0, now over the freshly prepended cell
+                } else {
                     self.head -= 1;
                 }
             }
@@ -269,6 +279,21 @@ mod tests {
         t.head = 2;
         t.move_head(Direction::R);
         assert_eq!(t.cells.len(), 4);
+    }
+
+    #[test]
+    fn test_tape_extend_left_edge() {
+        // Moving left from cell 0 must extend the tape leftward (not silently
+        // no-op), keeping head at 0 over the freshly prepended 0.
+        let mut t = Tape::from_vec(vec![1]);
+        assert_eq!(t.head, 0);
+        assert_eq!(t.cells.len(), 1);
+        t.move_head(Direction::L);
+        assert_eq!(t.cells.len(), 2);
+        assert_eq!(t.head, 0);
+        assert_eq!(t.read(), 0); // new cell is blank
+                                 // The original cell shifted right by one.
+        assert_eq!(t.cells[1], 1);
     }
 
     #[test]
