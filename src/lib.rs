@@ -308,9 +308,16 @@ mod tests {
 
     #[test]
     fn test_tape_encode() {
-        let t = Tape::from_vec(vec![0, 1, -1]);
-        let n = t.encode();
-        assert!(n > 0);
+        // Documented digit map: -1 → 0, 0 → 1, +1 → 2;
+        // encode(tape) = Σᵢ digit(tape[i]) · 3^i, range [0, 3^n − 1].
+        // [0, 1, -1] → digits [1, 2, 0] → 1·1 + 2·3 + 0·9 = 7
+        assert_eq!(Tape::from_vec(vec![0, 1, -1]).encode(), 7);
+        // [1, 0, -1] → digits [2, 1, 0] → 2·1 + 1·3 + 0·9 = 5
+        assert_eq!(Tape::from_vec(vec![1, 0, -1]).encode(), 5);
+        // all -1 → all digits 0 → 0 (minimum of the documented range)
+        assert_eq!(Tape::from_vec(vec![-1, -1, -1]).encode(), 0);
+        // all +1 → all digits 2 → 2·(1 + 3 + 9) = 26 = 3^3 − 1 (maximum)
+        assert_eq!(Tape::from_vec(vec![1, 1, 1]).encode(), 26);
     }
 
     #[test]
@@ -342,6 +349,11 @@ mod tests {
 
     #[test]
     fn test_tm_run() {
+        // This machine writes 1 and moves R on reading 0, staying in state 0.
+        // Because it always steps onto a fresh 0 cell, the (read 1) transition
+        // never fires and the machine never halts — so run() must exhaust the
+        // full step budget and return exactly that count, with the machine
+        // still running.
         let transitions = vec![
             Transition {
                 state: 0,
@@ -360,7 +372,46 @@ mod tests {
         ];
         let mut tm = TuringMachine::new(Tape::new(10), transitions, 1);
         let steps = tm.run(100);
-        assert!(steps > 0);
+        assert_eq!(steps, 100);
+        assert!(!tm.is_halted());
+    }
+
+    #[test]
+    fn test_two_ones_then_halt_hand_traced() {
+        // Independent hand trace (the core "execute transitions then halt"
+        // path), used to sabotage-verify test_tm_step_halts and the simulator
+        // generally:
+        //   tape = 10 zeros, head = 5 (Tape::new centres the head)
+        //   t0: (state 0, read 0) → write 1, R, next 1
+        //   t1: (state 1, read 0) → write 1, R, next 2   (halt_state = 2)
+        //   step 1: read 0 @5 → write 1 @5, head→6, state→1
+        //   step 2: read 0 @6 → write 1 @6, head→7, state→2 (halt)
+        //   step 3: is_halted → step() returns false, run() stops
+        //   run() therefore returns 2.
+        let transitions = vec![
+            Transition {
+                state: 0,
+                read: 0,
+                write: 1,
+                dir: Direction::R,
+                next: 1,
+            },
+            Transition {
+                state: 1,
+                read: 0,
+                write: 1,
+                dir: Direction::R,
+                next: 2,
+            },
+        ];
+        let mut tm = TuringMachine::new(Tape::new(10), transitions, 2);
+        let steps = tm.run(1000);
+        assert_eq!(steps, 2);
+        assert!(tm.is_halted());
+        assert_eq!(tm.tape.head, 7);
+        assert_eq!(tm.tape.cells[5], 1);
+        assert_eq!(tm.tape.cells[6], 1);
+        assert_eq!(tm.tape.non_zero_count(), 2);
     }
 
     #[test]
@@ -388,11 +439,33 @@ mod tests {
     }
 
     #[test]
-    fn test_busy_beaver() {
+    fn test_busy_beaver_finds_halting_machine() {
+        // For n_states = 2 the (small, simplified) search space includes
+        // machines that write at least one non-zero cell and halt — verified
+        // by hand-enumerating the configs the search generates.
         let (machine, score) = busy_beaver(2, 10);
-        // Should find at least one halting machine
-        // (may not find the optimal one due to simplified search)
-        let _ = (machine, score);
+        assert!(
+            score >= 1,
+            "expected non-zero busy-beaver score, got {score}"
+        );
+        assert!(
+            !machine.is_empty(),
+            "busy_beaver returned an empty machine for a non-trivial search"
+        );
+        // The returned machine must actually reproduce the claimed score when
+        // re-executed from a fresh tape (halt_state for n=2 is 2).
+        let mut tm = TuringMachine::new(Tape::new(10), machine.clone(), 2);
+        let steps = tm.run(1000);
+        assert!(tm.is_halted(), "returned machine did not halt");
+        assert!(
+            steps < 1000,
+            "returned machine ran the full step budget without halting"
+        );
+        assert_eq!(
+            tm.tape.non_zero_count(),
+            score,
+            "re-executed score did not match reported score"
+        );
     }
 
     #[test]
