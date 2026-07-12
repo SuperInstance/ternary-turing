@@ -218,28 +218,38 @@ pub fn busy_beaver(n_states: usize, tape_size: usize) -> (Vec<Transition>, usize
     (best_machine, best_score)
 }
 
-/// A simple universal-like machine: increment tape cell and move right
+/// A simple machine that cycles the starting cell through the full ternary
+/// alphabet `0 → +1 → -1 → 0` and then halts. All transitions use `Direction::S`
+/// so the head re-reads the cell it just wrote; moving rightward instead would
+/// leave the written symbol behind on a fresh `0` cell and the cycle would
+/// never progress past the first transition.
+///
+/// Hand trace on an all-zero tape (head at the centre cell):
+///   step 1: read 0  → write +1, state 0
+///   step 2: read +1 → write -1, state 0
+///   step 3: read -1 → write  0, state 1 (halt)
+/// After 3 steps the machine is halted and the cell is back to 0.
 pub fn counter_machine(size: usize) -> TuringMachine {
     let transitions = vec![
         Transition {
             state: 0,
             read: 0,
             write: 1,
-            dir: Direction::R,
+            dir: Direction::S,
             next: 0,
         },
         Transition {
             state: 0,
             read: 1,
             write: -1,
-            dir: Direction::R,
+            dir: Direction::S,
             next: 0,
         },
         Transition {
             state: 0,
             read: -1,
             write: 0,
-            dir: Direction::L,
+            dir: Direction::S,
             next: 1,
         },
     ];
@@ -362,10 +372,19 @@ mod tests {
 
     #[test]
     fn test_counter_machine() {
+        // Hand trace (head starts at the centre of an all-zero tape):
+        //   step 1: read 0  → write +1, stay, state 0
+        //   step 2: read +1 → write -1, stay, state 0
+        //   step 3: read -1 → write  0, stay, state 1 (halt)
+        // Net: 3 steps, machine halted, head unmoved, starting cell back to 0.
         let mut cm = counter_machine(10);
+        let centre = cm.tape.head;
         let steps = cm.run(50);
-        assert!(steps > 0);
-        assert!(cm.tape.non_zero_count() > 0);
+        assert_eq!(steps, 3);
+        assert!(cm.is_halted());
+        assert_eq!(cm.tape.head, centre);
+        assert_eq!(cm.tape.non_zero_count(), 0);
+        assert_eq!(cm.tape.read(), 0);
     }
 
     #[test]

@@ -72,13 +72,15 @@ For the ternary alphabet, the problem is related to the **generalized busy beave
 
 ### Counter Machine
 
-A pre-built universal-like counter machine that cycles through the ternary alphabet:
+A pre-built machine that cycles the starting cell through the full ternary alphabet `0 → +1 → -1 → 0` and then halts. All transitions use `Direction::S` (stay) so the head re-reads the symbol it just wrote — moving away after each write would leave the written symbol on a fresh `0` cell and the cycle could never progress past the first step:
 
 ```
-δ(0, 0)  → (1, R, 0)     // write +1, move right
-δ(0, 1)  → (-1, R, 0)    // write -1, move right
-δ(0, -1) → (0, L, 1)     // write 0, halt
+δ(0, 0)  → (1,  S, 0)    // 0 → +1, stay
+δ(0, 1)  → (-1, S, 0)    // +1 → -1, stay
+δ(0, -1) → (0,  S, 1)    // -1 → 0, halt
 ```
+
+Starting from an all-zero tape, the machine halts in exactly 3 steps with the starting cell back at `0`.
 
 ## Quick Start
 
