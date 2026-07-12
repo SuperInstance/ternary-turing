@@ -10,7 +10,11 @@ use alloc::{vec, vec::Vec};
 
 /// Direction: Left, Right, or Stay
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction { L, R, S }
+pub enum Direction {
+    L,
+    R,
+    S,
+}
 
 /// A transition: (state, read) → (write, direction, next_state)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,12 +35,20 @@ pub struct Tape {
 
 impl Tape {
     pub fn new(size: usize) -> Self {
-        Self { cells: vec![0; size], head: size / 2 }
+        Self {
+            cells: vec![0; size],
+            head: size / 2,
+        }
     }
 
     pub fn from_vec(data: Vec<i8>) -> Self {
-        let mut tape = Self { cells: data, head: 0 };
-        for c in tape.cells.iter_mut() { *c = (*c).clamp(-1, 1); }
+        let mut tape = Self {
+            cells: data,
+            head: 0,
+        };
+        for c in tape.cells.iter_mut() {
+            *c = (*c).clamp(-1, 1);
+        }
         tape
     }
 
@@ -52,8 +64,17 @@ impl Tape {
 
     pub fn move_head(&mut self, dir: Direction) {
         match dir {
-            Direction::L => { if self.head > 0 { self.head -= 1; } }
-            Direction::R => { self.head += 1; if self.head >= self.cells.len() { self.cells.push(0); } }
+            Direction::L => {
+                if self.head > 0 {
+                    self.head -= 1;
+                }
+            }
+            Direction::R => {
+                self.head += 1;
+                if self.head >= self.cells.len() {
+                    self.cells.push(0);
+                }
+            }
             Direction::S => {}
         }
     }
@@ -87,7 +108,12 @@ pub struct TuringMachine {
 
 impl TuringMachine {
     pub fn new(tape: Tape, transitions: Vec<Transition>, halt_state: usize) -> Self {
-        Self { tape, state: 0, transitions, halt_state }
+        Self {
+            tape,
+            state: 0,
+            transitions,
+            halt_state,
+        }
     }
 
     pub fn is_halted(&self) -> bool {
@@ -97,23 +123,29 @@ impl TuringMachine {
     /// Find matching transition
     fn find_transition(&self) -> Option<&Transition> {
         let read = self.tape.read();
-        self.transitions.iter().find(|t| t.state == self.state && t.read == read)
+        self.transitions
+            .iter()
+            .find(|t| t.state == self.state && t.read == read)
     }
 
-    /// Execute one step. Returns false if halted.
+    /// Execute one step. Returns false if the machine halted on this call
+    /// (either it was already halted, or no transition matched the current
+    /// `(state, read)` pair, which forces the machine into the halt state).
     pub fn step(&mut self) -> bool {
-        if self.is_halted() { return false; }
-        let read = self.tape.read();
-        let match_idx = self.transitions.iter().position(|t| t.state == self.state && t.read == read);
-        if let Some(idx) = match_idx {
-            let t = self.transitions[idx];
-            self.tape.write(t.write);
-            self.tape.move_head(t.dir);
-            self.state = t.next;
-            true
-        } else {
-            self.state = self.halt_state;
-            false
+        if self.is_halted() {
+            return false;
+        }
+        match self.find_transition().copied() {
+            Some(t) => {
+                self.tape.write(t.write);
+                self.tape.move_head(t.dir);
+                self.state = t.next;
+                true
+            }
+            None => {
+                self.state = self.halt_state;
+                false
+            }
         }
     }
 
@@ -121,7 +153,9 @@ impl TuringMachine {
     pub fn run(&mut self, max_steps: usize) -> usize {
         let mut count = 0;
         for _ in 0..max_steps {
-            if !self.step() { break; }
+            if !self.step() {
+                break;
+            }
             count += 1;
         }
         count
@@ -159,12 +193,15 @@ pub fn busy_beaver(n_states: usize, tape_size: usize) -> (Vec<Transition>, usize
         let tape = Tape::new(tape_size);
         let mut tm = TuringMachine::new(tape, transitions.clone(), halt);
         let steps = tm.run(1000);
-        if tm.is_halted() {
-            let score = tm.tape.non_zero_count();
-            if score > best_score {
-                best_score = score;
-                best_machine = transitions;
-            }
+        // A machine that never halts (ran the full budget) is not a valid
+        // busy-beaver candidate — skip it.
+        if steps >= 1000 || !tm.is_halted() {
+            continue;
+        }
+        let score = tm.tape.non_zero_count();
+        if score > best_score {
+            best_score = score;
+            best_machine = transitions;
         }
     }
 
@@ -174,9 +211,27 @@ pub fn busy_beaver(n_states: usize, tape_size: usize) -> (Vec<Transition>, usize
 /// A simple universal-like machine: increment tape cell and move right
 pub fn counter_machine(size: usize) -> TuringMachine {
     let transitions = vec![
-        Transition { state: 0, read: 0, write: 1, dir: Direction::R, next: 0 },
-        Transition { state: 0, read: 1, write: -1, dir: Direction::R, next: 0 },
-        Transition { state: 0, read: -1, write: 0, dir: Direction::L, next: 1 },
+        Transition {
+            state: 0,
+            read: 0,
+            write: 1,
+            dir: Direction::R,
+            next: 0,
+        },
+        Transition {
+            state: 0,
+            read: 1,
+            write: -1,
+            dir: Direction::R,
+            next: 0,
+        },
+        Transition {
+            state: 0,
+            read: -1,
+            write: 0,
+            dir: Direction::L,
+            next: 1,
+        },
     ];
     TuringMachine::new(Tape::new(size), transitions, 1)
 }
@@ -237,9 +292,13 @@ mod tests {
 
     #[test]
     fn test_tm_step_halts() {
-        let transitions = vec![
-            Transition { state: 0, read: 0, write: 1, dir: Direction::S, next: 1 },
-        ];
+        let transitions = vec![Transition {
+            state: 0,
+            read: 0,
+            write: 1,
+            dir: Direction::S,
+            next: 1,
+        }];
         let mut tm = TuringMachine::new(Tape::new(5), transitions, 1);
         assert!(tm.step()); // executes transition
         assert!(tm.is_halted()); // now at state 1
@@ -249,8 +308,20 @@ mod tests {
     #[test]
     fn test_tm_run() {
         let transitions = vec![
-            Transition { state: 0, read: 0, write: 1, dir: Direction::R, next: 0 },
-            Transition { state: 0, read: 1, write: 0, dir: Direction::R, next: 1 },
+            Transition {
+                state: 0,
+                read: 0,
+                write: 1,
+                dir: Direction::R,
+                next: 0,
+            },
+            Transition {
+                state: 0,
+                read: 1,
+                write: 0,
+                dir: Direction::R,
+                next: 1,
+            },
         ];
         let mut tm = TuringMachine::new(Tape::new(10), transitions, 1);
         let steps = tm.run(100);
